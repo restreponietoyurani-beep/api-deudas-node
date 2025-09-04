@@ -15,6 +15,7 @@ function LoginPage() {
     try {
       const res = await axios.post(`${API_URL}/login`, { email, password });
       localStorage.setItem("token", res.data.token);
+      localStorage.setItem("user_id", res.data.user.id);
       navigate("/deudas");
     } catch (err: any) {
       setError(err.response?.data?.error || "Error en login");
