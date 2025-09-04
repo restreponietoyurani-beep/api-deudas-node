@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { pool } from "../db";
 import bcrypt from "bcryptjs";
+import { cacheService } from "../services/cache";
 
 // Registrar usuario
 export const registerUser = async (req: Request, res: Response) => {
@@ -60,12 +61,16 @@ export const loginUser = async (req: Request, res: Response) => {
         return res.status(401).json({ error: "Contraseña incorrecta" });
       }
   
+      // Generar token
       const token = jwt.sign(
         { userId: dbUser.id, email: dbUser.email },
         process.env.JWT_SECRET as string,
         { expiresIn: "1h" }
       );
-  
+      
+      // Guardar en cache por 1 hora (3600 segundos)
+      cacheService.set(token, { userId: dbUser.id, email: dbUser.email }, 3600);
+
       return res.json({
         message: "Login exitoso",
         token,
@@ -76,3 +81,22 @@ export const loginUser = async (req: Request, res: Response) => {
       return res.status(500).json({ error: "Error iniciando sesión" });
     }
   };
+
+// Logout usuario
+export const logoutUser = async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      const token = authHeader.split(" ")[1];
+      if (token) {
+        // Eliminar token de la cache
+        cacheService.delete(token);
+      }
+    }
+    
+    return res.json({ message: "Logout exitoso" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Error cerrando sesión" });
+  }
+};

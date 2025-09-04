@@ -58,6 +58,22 @@ function DebtsPage() {
     const token = localStorage.getItem("token");
     const navigate = useNavigate();
 
+    // Función auxiliar para manejar errores de autenticación
+    const handleAuthError = (error: any) => {
+        if (error.response?.status === 401) {
+            // Mostrar mensaje de sesión expirada
+            setError("Tu sesión ha expirado. Serás redirigido al login en 3 segundos...");
+            
+            // Redirigir después de 3 segundos
+            setTimeout(() => {
+                handleLogout();
+            }, 3000);
+            
+            return true; // Indica que se manejó el error
+        }
+        return false; // No se manejó el error
+    };
+
     const fetchDebts = async (statusFilter?: "all" | "pendiente" | "pagada") => {
         setLoading(true);
         setError("");
@@ -72,6 +88,7 @@ function DebtsPage() {
             });
             setDebts(res.data);
         } catch (err: any) {
+            if (handleAuthError(err)) return;
             setError(err.response?.data?.error || "Error al obtener las deudas");
         } finally {
             setLoading(false);
@@ -119,6 +136,7 @@ function DebtsPage() {
             setShowModal(false);
             fetchDebts(filter);
         } catch (err: any) {
+            if (handleAuthError(err)) return;
             alert(err.response?.data?.error || "Error guardando la deuda");
         } finally {
             setCreating(false);
@@ -140,6 +158,7 @@ function DebtsPage() {
             });
             fetchDebts(filter);      // Refrescar lista de deudas
         } catch (err: any) {
+            if (handleAuthError(err)) return;
             alert(err.response?.data?.error || "Error eliminando la deuda");
         } finally {
             setShowConfirm(false);   // Cerramos el modal
@@ -160,10 +179,20 @@ function DebtsPage() {
     };
 
     // Función para cerrar sesión
-    const handleLogout = () => {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user_id");
-        navigate("/login");
+    const handleLogout = async () => {
+        try {
+            // Llamar al endpoint de logout para limpiar la cache del servidor
+            await axios.post("http://localhost:4000/api/auth/logout", {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+        } catch (error) {
+            console.log("Error en logout:", error);
+        } finally {
+            // Limpiar localStorage y redirigir
+            localStorage.removeItem("token");
+            localStorage.removeItem("user_id");
+            navigate("/login");
+        }
     };
 
     return (
@@ -231,7 +260,20 @@ function DebtsPage() {
                 </div>
 
                 {/* Mensaje de error */}
-                {error && <p className="text-red-500">{error}</p>}
+                {error && (
+                    <div className={`p-4 rounded-lg border ${
+                        error.includes("sesión ha expirado") 
+                            ? "bg-yellow-50 border-yellow-200 text-yellow-800" 
+                            : "bg-red-50 border-red-200 text-red-800"
+                    }`}>
+                        <div className="flex items-center">
+                            <span className="text-lg mr-2">
+                                {error.includes("sesión ha expirado") ? "⏰" : "⚠️"}
+                            </span>
+                            <p className="font-medium">{error}</p>
+                        </div>
+                    </div>
+                )}
 
                 {/* Tabla de deudas */}
                 {loading ? (

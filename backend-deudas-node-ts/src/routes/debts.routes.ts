@@ -7,8 +7,12 @@ import {
   deleteDebt,
   markAsPaid,
 } from "../controllers/debts.controller";
+import { authMiddleware } from "../middleware/authMiddleware";
 
 const router = Router();
+
+// Aplicar middleware de autenticación a todas las rutas de deudas
+router.use(authMiddleware);
 
 router.post("/", createDebt);
 router.get("/", getDebts);
