@@ -74,7 +74,7 @@ export const getDebtById = async (req: Request, res: Response) => {
 export const updateDebt = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { description, amount } = req.body;
+        const { description, amount, is_paid } = req.body;
 
         const existing = await pool.query("SELECT * FROM debts WHERE id = $1", [id]);
         if (existing.rowCount === 0) {
@@ -88,8 +88,8 @@ export const updateDebt = async (req: Request, res: Response) => {
         }
 
         const result = await pool.query(
-            "UPDATE debts SET description = $1, amount = $2 WHERE id = $3 RETURNING *",
-            [description || existing.rows[0].description, amount ?? existing.rows[0].amount, id]
+            "UPDATE debts SET description = $1, amount = $2, is_paid = $3 WHERE id = $4 RETURNING *",
+            [description || existing.rows[0].description, amount ?? existing.rows[0].amount, is_paid ?? existing.rows[0].is_paid, id]
         );
 
         return res.json(result.rows[0]);
