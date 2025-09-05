@@ -6,6 +6,8 @@ import {
   updateDebt,
   deleteDebt,
   markAsPaid,
+  exportDebtsCSV,
+  getDebtsSummary
 } from "../controllers/debts.controller";
 import { authMiddleware } from "../middleware/authMiddleware";
 
@@ -16,6 +18,8 @@ router.use(authMiddleware);
 
 router.post("/", createDebt);
 router.get("/", getDebts);
+router.get("/export", exportDebtsCSV);
+router.get("/summary", getDebtsSummary);
 router.get("/:id", getDebtById);
 router.put("/:id", updateDebt);
 router.delete("/:id", deleteDebt);

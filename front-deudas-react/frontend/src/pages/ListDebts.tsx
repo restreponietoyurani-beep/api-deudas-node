@@ -39,6 +39,12 @@ const formatDate = (dateString: string): string => {
         return dateString; // Si hay error, devolver la fecha original
     }
 };
+interface DebtSummary {
+    total_pagadas: number;
+    total_pendientes: number;
+    monto_pagado: number;
+    monto_pendiente: number;
+}
 
 function DebtsPage() {
     const [debts, setDebts] = useState<Debt[]>([]);
@@ -53,6 +59,7 @@ function DebtsPage() {
     const [debtToDelete, setDebtToDelete] = useState<string | null>(null);
     const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
     const [isPaid, setIsPaid] = useState(false);
+    const [summary, setSummary] = useState<DebtSummary | null>(null);
 
     const userId = localStorage.getItem("user_id");
     const token = localStorage.getItem("token");
@@ -63,16 +70,18 @@ function DebtsPage() {
         if (error.response?.status === 401) {
             // Mostrar mensaje de sesión expirada
             setError("Tu sesión ha expirado. Serás redirigido al login en 3 segundos...");
-            
+
             // Redirigir después de 3 segundos
             setTimeout(() => {
                 handleLogout();
             }, 3000);
-            
+
             return true; // Indica que se manejó el error
         }
         return false; // No se manejó el error
     };
+
+    
 
     const fetchDebts = async (statusFilter?: "all" | "pendiente" | "pagada") => {
         setLoading(true);
@@ -87,11 +96,24 @@ function DebtsPage() {
                 headers: { Authorization: `Bearer ${token}` },
             });
             setDebts(res.data);
+            await fetchSummary();
         } catch (err: any) {
             if (handleAuthError(err)) return;
             setError(err.response?.data?.error || "Error al obtener las deudas");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchSummary = async () => {
+        try {
+            const res = await axios.get(`${API_URL}/summary`, {
+                params: { user_id: userId },
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            setSummary(res.data);
+        } catch (err: any) {
+            console.error(err);
         }
     };
 
@@ -102,6 +124,7 @@ function DebtsPage() {
             return;
         }
         fetchDebts(filter);
+        fetchSummary();
     }, []);
 
     const filteredDebts = debts.filter((debt) => {
@@ -195,6 +218,45 @@ function DebtsPage() {
         }
     };
 
+    const exportToCSV = async () => {
+        try {
+            const userId = localStorage.getItem("user_id");
+            const token = localStorage.getItem("token");
+
+            if (!userId || !token) {
+                alert("Sesión inválida. Vuelve a iniciar sesión.");
+                return;
+            }
+
+            // Consumir el endpoint del backend
+            const res = await fetch(
+                `http://localhost:4000/api/debts/export?user_id=${userId}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            if (!res.ok) {
+                throw new Error("Error exportando CSV");
+            }
+
+            // Descargar archivo
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.setAttribute("download", "deudas.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+        } catch (err: any) {
+            alert(err.message || "Error exportando CSV");
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-100 p-6">
             <div className="max-w-5xl mx-auto bg-white rounded-3xl shadow-2xl p-6 space-y-6">
@@ -257,15 +319,21 @@ function DebtsPage() {
                     >
                         Nueva deuda
                     </button>
+                    <button
+                        onClick={exportToCSV}
+                        disabled={debts.length === 0}
+                        className="px-4 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700 transition"
+                    >
+                        Exportar CSV
+                    </button>
                 </div>
 
                 {/* Mensaje de error */}
                 {error && (
-                    <div className={`p-4 rounded-lg border ${
-                        error.includes("sesión ha expirado") 
-                            ? "bg-yellow-50 border-yellow-200 text-yellow-800" 
-                            : "bg-red-50 border-red-200 text-red-800"
-                    }`}>
+                    <div className={`p-4 rounded-lg border ${error.includes("sesión ha expirado")
+                        ? "bg-yellow-50 border-yellow-200 text-yellow-800"
+                        : "bg-red-50 border-red-200 text-red-800"
+                        }`}>
                         <div className="flex items-center">
                             <span className="text-lg mr-2">
                                 {error.includes("sesión ha expirado") ? "⏰" : "⚠️"}
@@ -274,7 +342,26 @@ function DebtsPage() {
                         </div>
                     </div>
                 )}
-
+                {summary && (
+                    <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl shadow">
+                        <div>
+                            <p className="font-semibold text-green-600">
+                                ✅ Total pagadas: {summary.total_pagadas}
+                            </p>
+                            <p className="font-semibold text-green-700">
+                                💰 Monto pagado: ${Number(summary.monto_pagado).toFixed(2)}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="font-semibold text-yellow-600">
+                                ⏳ Total pendientes: {summary.total_pendientes}
+                            </p>
+                            <p className="font-semibold text-yellow-700">
+                                💰 Saldo pendiente: ${Number(summary.monto_pendiente).toFixed(2)}
+                            </p>
+                        </div>
+                    </div>
+                )}
                 {/* Tabla de deudas */}
                 {loading ? (
                     <p>Cargando...</p>
@@ -296,7 +383,7 @@ function DebtsPage() {
                                 {filteredDebts.map((debt) => (
                                     <tr key={debt.id} className="border-b hover:bg-gray-50">
                                         <td className="px-4 py-2 flex gap-2">
-                                            <button onClick={() => handleOpenEditModal(debt)}  disabled={debt.is_paid} className="p-1 rounded hover:bg-gray-200">
+                                            <button onClick={() => handleOpenEditModal(debt)} disabled={debt.is_paid} className="p-1 rounded hover:bg-gray-200">
                                                 <PencilIcon className="h-5 w-5 text-blue-600" />
                                             </button>
                                             <button onClick={() => handleDeleteDebt(debt.id)} className="p-1 rounded hover:bg-gray-200">
